@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Mic, Volume2, Info, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mic, Volume2, Loader2, AlertCircle } from 'lucide-react';
 import { useSettings } from '../../context/SettingsContext';
 import { generateCompletion } from '../../utils/ai';
 import '../../index.css';
@@ -14,39 +14,54 @@ const SpeechMode = () => {
   const [transcript, setTranscript] = useState('');
   const [options, setOptions] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState(null);
+  
   const recognitionRef = useRef(null);
   const silenceTimer = useRef(null);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      setError("Микрофон не поддерживается в этом браузере.");
+      return;
+    }
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = language === 'ru' ? 'ru-RU' : 'en-US';
+    recognition.lang = language === 'en' ? 'en-US' : 'ru-RU';
 
     recognition.onresult = (event) => {
       let current = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
+      for (let i = 0; i < event.results.length; ++i) {
         current += event.results[i][0].transcript;
       }
       setTranscript(current);
 
-      // Auto-stop after 1.5s of silence
       clearTimeout(silenceTimer.current);
+      if (!event.results[event.results.length - 1].isFinal) return; // Wait for finality
+
       silenceTimer.current = setTimeout(() => {
-        if (current.length > 2) {
+        if (current.length > 1) {
           recognition.stop();
           processTranscript(current);
         }
-      }, 1500);
+      }, 1000);
     };
 
+    recognition.onstart = () => {
+      setIsListening(true);
+      setError(null);
+    };
+    
     recognition.onend = () => setIsListening(false);
-    recognitionRef.current = recognition;
+    recognition.onerror = (e) => {
+      console.error(e);
+      if (e.error === 'not-allowed') setError("Разрешите доступ к микрофону");
+      setIsListening(false);
+    };
 
-    speak(language === 'en' ? "Speech mode. I am listening." : "Режим речи. Скажите фразу.");
+    recognitionRef.current = recognition;
 
     return () => {
       if (recognitionRef.current) recognitionRef.current.abort();
@@ -60,21 +75,32 @@ const SpeechMode = () => {
     } else {
       setTranscript('');
       setOptions([]);
+      setError(null);
       try {
         recognitionRef.current.start();
-        setIsListening(true);
-      } catch(e) {}
+      } catch(e) {
+        console.error(e);
+      }
     }
   };
 
   const processTranscript = async (text) => {
     setIsProcessing(true);
-    const prompt = `Correct the following speech (user has a defect): "${text}". Return exactly 3 short options as JSON array like ["Opt1", "Opt2", "Opt3"]. Language: ${language === 'en' ? 'English' : 'Russian'}`;
+    const prompt = `Correct this speech defect nicely: "${text}". 
+      Return ONLY a JSON array of 3 strings: ["Option1", "Option2", "Option3"]. 
+      Language: ${language === 'en' ? 'English' : 'Russian'}`;
 
     try {
-      const res = await generateCompletion(text, apiKey, prompt, '["Мне нужна помощь", "Где выход?", "Который час?"]');
+      const res = await generateCompletion(text, apiKey, prompt);
       let clean = res.replace(/```json/gi, '').replace(/```/g, '').trim();
-      setOptions(JSON.parse(clean));
+      
+      // Safe parsing
+      try {
+        const parsed = JSON.parse(clean);
+        setOptions(Array.isArray(parsed) ? parsed : [clean]);
+      } catch(e) {
+        setOptions([clean]);
+      }
     } catch (e) {
       setOptions([text]);
     }
@@ -88,27 +114,28 @@ const SpeechMode = () => {
         <h2 style={{ fontSize: '1.5rem' }}>{language === 'en' ? 'SPEECH' : 'РЕЧЬ'}</h2>
       </div>
 
-      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2rem' }}>
+      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem' }}>
+        
         <motion.div 
-          animate={{ scale: isListening ? [1, 1.1, 1] : 1 }}
-          transition={{ repeat: Infinity, duration: 1.5 }}
           onClick={toggleListening}
           className="glass-panel"
-          style={{ width: '200px', height: '200px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isListening ? 'var(--secondary)' : 'rgba(255,255,255,0.05)', border: '4px solid white' }}
+          style={{ width: '180px', height: '180px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isListening ? 'var(--secondary)' : 'rgba(255,255,255,0.05)', border: isListening ? '4px solid white' : '2px solid rgba(255,255,255,0.2)' }}
         >
-          {isProcessing ? <Loader2 size={100} className="animate-spin" /> : <Mic size={100} />}
+          {isProcessing ? <Loader2 size={80} className="animate-spin" /> : <Mic size={80} color={isListening ? 'white' : 'var(--primary)'} />}
         </motion.div>
 
-        <p style={{ fontSize: '1.8rem', textAlign: 'center' }}>
-          {isProcessing ? "ИИ думает..." : isListening ? "Я слушаю вас..." : "Нажмите, чтобы начать"}
-        </p>
+        <h2 style={{ fontSize: '1.8rem', textAlign: 'center' }}>
+          {isProcessing ? "ИИ думает..." : isListening ? "Слушаю..." : "Нажмите и скажите"}
+        </h2>
 
-        {transcript && <div style={{ fontSize: '1.2rem', color: 'gray', padding: '1rem', border: '1px solid #333', borderRadius: '1rem' }}>"{transcript}"</div>}
+        {error && <div style={{ color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '8px' }}><AlertCircle size={18} /> {error}</div>}
 
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {transcript && <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '1rem', width: '100%', textAlign: 'center', fontStyle: 'italic' }}>"{transcript}"</div>}
+
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {options.map((opt, i) => (
-             <button key={i} onClick={() => speak(opt)} className="glass-btn" style={{ justifyContent: 'flex-start', padding: '1.5rem', borderRadius: '1rem' }}>
-               <Volume2 size={24} style={{ marginRight: '1rem' }} /> {opt}
+             <button key={i} onClick={() => speak(opt)} className="glass-btn" style={{ justifyContent: 'flex-start', padding: '1.5rem', borderRadius: '1.2rem', background: 'rgba(255,255,255,0.05)' }}>
+               <Volume2 size={22} style={{ marginRight: '1rem', color: 'var(--secondary)' }} /> <span style={{ textAlign: 'left' }}>{opt}</span>
              </button>
           ))}
         </div>
