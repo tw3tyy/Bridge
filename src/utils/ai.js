@@ -20,7 +20,7 @@ export const generateCompletion = async (prompt, apiKey, systemInstruction = '',
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
     console.error("Gemini API Error:", e);
-    return mockResponse;
+    return `["API Ошибка: ${e.message}"]`;
   }
 };
 
@@ -53,7 +53,7 @@ export const generateVisionDescription = async (prompt, base64Image, apiKey, moc
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
     console.error("Gemini Vision API Error:", e);
-    return mockResponse;
+    return `API Ошибка: ${e.message}`;
   }
 };
 
@@ -99,6 +99,6 @@ Mandatory Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazak
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
     console.error("Gemini Audio API Error:", e);
-    return mockResponse;
+    return `API Ошибка: ${e.message}`;
   }
 };
