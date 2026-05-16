@@ -1,5 +1,4 @@
 const proxyFetch = async (payload, localApiKey) => {
-  // Use local key if provided (for testing), otherwise use secure proxy
   if (localApiKey && localApiKey.trim().length > 10) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${localApiKey.trim()}`;
     const res = await fetch(url, {
@@ -11,14 +10,14 @@ const proxyFetch = async (payload, localApiKey) => {
     if (data.error) throw new Error(data.error.message);
     return data;
   } else {
-    // Secure production route
+    // Correctly route to our Vercel Serverless Function
     const res = await fetch('/api/gemini', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ payload })
     });
     const data = await res.json();
-    if (data.error) throw new Error(data.error?.message || "Internal Server Error");
+    if (data.error) throw new Error(data.error?.message || "AI Server Error");
     return data;
   }
 };
@@ -33,29 +32,40 @@ export const generateCompletion = async (text, apiKey, systemPrompt, mock = '') 
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
     console.error("AI Error:", e);
-    return mock || "Извините, произошла ошибка ИИ.";
+    return mock || "Ошибка связи с ИИ.";
   }
 };
 
 export const generateVisionDescription = async (prompt, base64Image, apiKey) => {
   if (!base64Image) return "Ошибка камеры";
-  let base64Data = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+  
+  // Clean base64 data
+  let base64Data = base64Image;
+  if (base64Image.includes(',')) {
+    base64Data = base64Image.split(',')[1];
+  }
   
   const payload = {
     contents: [{ 
       parts: [
         { text: prompt },
-        { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+        { inline_data: { mimeType: "image/jpeg", data: base64Data } }
       ] 
     }]
   };
+  
   try {
     const data = await proxyFetch(payload, apiKey);
+    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      throw new Error("Пустой ответ от ИИ");
+    }
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
     console.error("Vision Error:", e);
-    if (e.message.includes('key not configured')) return "Ошибка: API ключ не найден в настройках Vercel.";
-    return "Не удалось получить ответ от ИИ.";
+    if (e.message.includes('key not configured')) {
+      return "Ошибка: Проверьте GEMINI_API_KEY в настройках Vercel.";
+    }
+    return "Не удалось получить ответ. Попробуйте еще раз.";
   }
 };
 
@@ -68,7 +78,7 @@ export const generateAudioAnalysis = async (base64Audio, language, apiKey) => {
     contents: [{ 
       parts: [
         { text: prompt },
-        { inline_data: { mime_type: "audio/webm", data: base64Data } }
+        { inline_data: { mimeType: "audio/webm", data: base64Data } }
       ] 
     }]
   };
