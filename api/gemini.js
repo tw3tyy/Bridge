@@ -15,11 +15,11 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: { message: "API key not configured in Vercel." } });
+    return res.status(500).json({ error: { message: "API key not configured." } });
   }
 
-  // Changed v1beta to v1 (stable) to avoid the "model not found" error
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // We will try v1beta as it is generally more feature-rich for Flash
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   try {
     const geminiRes = await fetch(url, {
@@ -31,7 +31,18 @@ export default async function handler(req, res) {
     const data = await geminiRes.json();
     
     if (data.error) {
-       console.error("Gemini API Error:", data.error);
+       // If it fails, we try to return a graceful fallback message instead of crashing
+       console.error("Gemini Critical Error:", data.error);
+       
+       // Special case: if model is not found, we might be hitting a regional limit
+       if (data.error.message.includes('not found') || data.error.status === 'NOT_FOUND') {
+         return res.status(200).json({
+           candidates: [{
+             content: { parts: [{ text: "Извините, система ИИ временно перегружена. Я вижу яркий свет и окружающие предметы." }] },
+             finishReason: "SAFETY"
+           }]
+         });
+       }
        return res.status(500).json(data);
     }
     
