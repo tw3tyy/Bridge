@@ -8,7 +8,7 @@ import '../../index.css';
 
 const HearingMode = () => {
   const navigate = useNavigate();
-  const { language, apiKey } = useSettings();
+  const { language, apiKey, speak } = useSettings();
   const [isRecording, setIsRecording] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [events, setEvents] = useState([]);
@@ -27,7 +27,7 @@ const HearingMode = () => {
 
   const startAnalysisCycle = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-       addEvent("Microphone not supported on this browser.", "critical");
+       addEvent("Microphone not supported.", "critical");
        return;
     }
 
@@ -50,16 +50,15 @@ const HearingMode = () => {
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
-           const base64data = reader.result;
-           let mockText = language === 'en' ? 'Mock: A person is speaking calmly.' : language === 'kk' ? 'Mock: Адам сабырлы сөйлеп тұр.' : 'Дема: Человек говорит спокойно.';
-           
-           try {
-              const analysisText = await generateAudioAnalysis(base64data, 'audio/webm', language, apiKey, mockText);
-              addEvent(analysisText, 'high');
-           } catch (e) {
-              addEvent("AI Error: " + e.message, 'critical');
-           }
-           setIsAnalyzing(false);
+            const base64data = reader.result;
+            try {
+               const analysisText = await generateAudioAnalysis(base64data, language, apiKey);
+               addEvent(analysisText, 'high');
+               speak(analysisText);
+            } catch (e) {
+               addEvent("Error: " + e.message, 'critical');
+            }
+            setIsAnalyzing(false);
         };
       };
 
@@ -73,7 +72,7 @@ const HearingMode = () => {
       }, 4000);
 
     } catch (err) {
-       addEvent("Microphone permission denied.", "critical");
+       addEvent("Permission denied.", "critical");
        setIsRecording(false);
     }
   };
@@ -93,63 +92,56 @@ const HearingMode = () => {
         <button onClick={() => navigate('/')} className="glass-btn">
           <ArrowLeft size={24} /> {language === 'en' ? 'Back' : 'Назад'}
         </button>
-        <div style={{ textAlign: 'right' }}>
+        <div>
            <h2 style={{ fontSize: '1.4rem', margin: 0, fontWeight: 'bold' }}>
              {language === 'en' ? 'HEARING' : language === 'kk' ? 'ЕСТУ' : 'СЛУХ'}
            </h2>
-           <div style={{ color: 'var(--accent)', fontSize: '0.8rem' }}>Real-time Analysis</div>
         </div>
       </div>
 
-      <div style={{ flexGrow: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
         
-        {/* Start Button */}
         <div 
           onClick={() => { if (!isRecording && !isAnalyzing) startAnalysisCycle(); }}
           className={`glass-panel ${isRecording ? 'animate-pulse-glow' : ''}`}
           style={{ 
-            width: '140px', height: '140px', borderRadius: '50%', 
+            width: '160px', height: '160px', borderRadius: '50%', 
             display: 'flex', justifyContent: 'center', alignItems: 'center',
             cursor: (isRecording || isAnalyzing) ? 'default' : 'pointer', 
-            zIndex: 10, 
             background: isRecording ? 'var(--accent)' : 'var(--bg-card)',
             border: `2px solid ${isRecording ? 'var(--accent-glow)' : 'var(--glass-border)'}`
           }}
         >
-          {isRecording ? <Mic size={56} color="white" /> : 
-           isAnalyzing ? <Activity size={56} color="var(--accent)" className="animate-pulse-glow" /> : 
-           <Ear size={56} color="var(--accent)" />}
+          {isRecording ? <Mic size={64} color="white" /> : 
+           isAnalyzing ? <Activity size={64} color="var(--accent)" className="animate-pulse-glow" /> : 
+           <Ear size={64} color="var(--accent)" />}
         </div>
 
-        <p style={{ marginTop: '2rem', fontSize: '1.2rem', color: 'var(--text-muted)' }}>
-           {isRecording ? (language === 'en' ? "Recording environment 4s..." : "Слушаю окружение (4с)...") :
-            isAnalyzing ? (language === 'en' ? "AI is analyzing audio..." : "ИИ анализирует звук...") :
-            (language === 'en' ? "Tap to listen & analyze environment" : "Нажмите, чтобы проанализировать звуки вокруг")}
+        <p style={{ marginTop: '2.5rem', fontSize: '1.3rem', color: 'var(--text-main)', textAlign: 'center' }}>
+           {isRecording ? (language === 'en' ? "Listening..." : "Слушаю...") :
+            isAnalyzing ? (language === 'en' ? "Analyzing..." : "Анализирую...") :
+            (language === 'en' ? "Tap to analyze environment" : "Нажмите для анализа звуков")}
         </p>
 
-        {/* Display Analysis Results */}
-        <div style={{ width: '100%', marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ width: '100%', marginTop: '3rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <AnimatePresence>
             {events.map((evt) => {
               const style = getEventStyles(evt.severity);
               return (
                 <motion.div
-                  key={evt.id} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }}
+                  key={evt.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
                   className="glass-panel"
                   style={{
                     padding: '1.5rem', width: '100%',
-                    borderLeft: `5px solid ${style.border}`, background: style.bg,
-                    display: 'flex', alignItems: 'center', gap: '1rem'
+                    borderLeft: `6px solid ${style.border}`, background: style.bg,
+                    display: 'flex', alignItems: 'center', gap: '1.5rem'
                   }}
                 >
-                  <div style={{ padding: '12px', background: 'var(--bg-dark)', borderRadius: '12px' }}>
+                  <div style={{ padding: '12px', background: 'var(--bg-dark)', borderRadius: '15px' }}>
                     {style.icon}
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0' }}>
-                      {language === 'en' ? 'AI Environment Alert' : language === 'kk' ? 'ИИ Айнала туралы ескерту' : 'ИИ Контекст Окружения'}
-                    </h3>
-                    <p style={{ fontSize: '1.2rem', color: 'white', margin: 0 }}>{evt.text}</p>
+                    <p style={{ fontSize: '1.3rem', color: 'white', margin: 0, fontWeight: 600 }}>{evt.text}</p>
                   </div>
                 </motion.div>
               )

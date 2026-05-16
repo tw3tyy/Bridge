@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, Ear, MessageSquareQuote, Play, Award, Settings, Key, Globe, AlertCircle, Mic } from 'lucide-react';
+import { Eye, Ear, MessageSquareQuote, Play, Award, Settings, Globe, Mic } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import '../index.css';
 
@@ -10,7 +10,7 @@ const Gateway = () => {
   const [started, setStarted] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const { language, setLanguage, apiKey, setApiKey, getVoiceLang } = useSettings();
+  const { language, setLanguage, speak } = useSettings();
   const recognitionRef = useRef(null);
   
   const startListening = () => {
@@ -20,27 +20,19 @@ const Gateway = () => {
   };
 
   const speakWelcome = () => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      let text = "Добро пожаловать в Bridge. Скажите: Зрение, Слух, или Речь.";
-      if (language === 'en') text = "Welcome to Bridge. Say: Vision, Hearing, or Speech.";
-      if (language === 'kk') text = "Bridge-ке қош келдіңіз. 'Көру', 'Есту' немесе 'Сөйлеу' деп айтыңыз.";
-      const msg = new SpeechSynthesisUtterance(text);
-      msg.lang = getVoiceLang();
-      msg.onend = () => {
-         // Start listening ONLY after the welcome message goes silent!
-         setTimeout(() => startListening(), 300);
-      };
-      window.speechSynthesis.speak(msg);
-    } else {
-      startListening();
-    }
+    let text = "Добро пожаловать в Bridge. Скажите: Зрение, Слух, или Речь.";
+    if (language === 'en') text = "Welcome to Bridge. Say: Vision, Hearing, or Speech.";
+    if (language === 'kk') text = "Bridge-ке қош келдіңіз. 'Көру', 'Есту' немесе 'Сөйлеу' деп айтыңыз.";
+    
+    speak(text, () => {
+       setTimeout(() => startListening(), 300);
+    });
   };
 
   const handleStart = () => {
     if (started) return;
     setStarted(true);
-    setTimeout(() => speakWelcome(), 300);
+    setTimeout(() => speakWelcome(), 500);
   };
 
   useEffect(() => {
@@ -49,7 +41,7 @@ const Gateway = () => {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = getVoiceLang();
+      recognition.lang = language === 'ru' ? 'ru-RU' : language === 'en' ? 'en-US' : 'kk-KZ';
 
       recognition.onstart = () => setIsListening(true);
       
@@ -73,7 +65,6 @@ const Gateway = () => {
 
       recognition.onend = () => {
          setIsListening(false);
-         // Keep listening active
          if (started && !showSettings) {
              setTimeout(() => {
                 if (recognitionRef.current) {
@@ -101,7 +92,7 @@ const Gateway = () => {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)" }}
             transition={{ duration: 0.6 }}
-            style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--bg-main)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'var(--bg-dark)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             onClick={handleStart}
           >
             <div 
@@ -110,9 +101,9 @@ const Gateway = () => {
             >
               <Play size={80} color="white" fill="white" style={{ marginLeft: '10px' }}/>
             </div>
-            <h1 className="text-gradient" style={{ fontSize: '4rem', marginTop: '3rem', marginBottom: '1rem' }}>BRIDGE</h1>
+            <h1 className="text-gradient" style={{ fontSize: '4.5rem', marginTop: '3rem', marginBottom: '1rem', fontWeight: 900 }}>BRIDGE</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '1.4rem', textAlign: 'center', maxWidth: '600px' }}>
-              Нажмите в любую точку экрана, чтобы начать
+              {language === 'ru' ? 'Нажмите, чтобы начать' : language === 'en' ? 'Tap to start' : 'Бастау үшін басыңыз'}
             </p>
           </motion.div>
         )}
@@ -127,21 +118,21 @@ const Gateway = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
-                <h1 className="text-gradient" style={{ fontSize: '3rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <h1 className="text-gradient" style={{ fontSize: '3.5rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '15px', fontWeight: 800 }}>
                    Bridge 
                    {isListening && <Mic size={28} color="var(--accent)" className="animate-pulse-glow" />}
                 </h1>
-                <p style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem' }}>
                    {language === 'en' ? 'Say: "Vision", "Hearing" or "Speech"' : language === 'kk' ? '"Көру", "Есту" немесе "Сөйлеу" деп айтыңыз' : 'Скажите: "Зрение", "Слух" или "Речь"'}
                 </p>
               </div>
               
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button onClick={() => setShowSettings(!showSettings)} className="glass-btn" style={{ padding: '0.5rem 1rem' }}>
-                  <Settings size={20} color="var(--text-main)" />
+              <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
+                <button onClick={() => setShowSettings(!showSettings)} className="glass-btn" style={{ padding: '0.8rem 1.2rem' }}>
+                  <Settings size={22} color="white" />
                 </button>
-                <button onClick={() => navigate('/dashboard')} className="glass-btn" style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                  <Award size={20} color="var(--secondary)" />
+                <button onClick={() => navigate('/dashboard')} className="glass-btn" style={{ padding: '0.8rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                  <Award size={22} color="var(--secondary)" />
                   <span style={{ fontWeight: 'bold'}}>
                     {language === 'en' ? 'Profile' : language === 'kk' ? 'Профиль' : 'Профиль'}
                   </span>
@@ -155,57 +146,60 @@ const Gateway = () => {
                   initial={{ opacity: 0, height: 0, scale: 0.95 }}
                   animate={{ opacity: 1, height: 'auto', scale: 1 }}
                   exit={{ opacity: 0, height: 0, scale: 0.95 }}
-                  style={{ overflow: 'hidden', marginBottom: '2rem' }}
+                  style={{ overflow: 'hidden', marginBottom: '2.5rem' }}
                 >
-                  <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-                     {/* Settings Content... */}
-                    <div style={{ flex: 1, minWidth: '200px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', color: 'var(--accent)' }}><Globe size={18}/> Язык интерфейса</label>
-                      <select value={language} onChange={(e) => setLanguage(e.target.value)} style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', background: 'var(--bg-dark)', color: 'white', border: '1px solid var(--glass-border)' }}>
-                        <option value="ru">Русский</option>
+                  <div className="glass-panel" style={{ padding: '2rem', maxWidth: '400px' }}>
+                    <div style={{ width: '100%' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', color: 'var(--accent)', fontWeight: 'bold' }}>
+                        <Globe size={20}/> {language === 'en' ? 'Application Language' : 'Язык приложения'}
+                      </label>
+                      <select value={language} onChange={(e) => setLanguage(e.target.value)} style={{ width: '100%', padding: '1rem', borderRadius: '12px', background: 'var(--bg-dark)', color: 'white', border: '1px solid var(--glass-border)', fontSize: '1.1rem' }}>
+                        <option value="ru">Русский (Russian)</option>
                         <option value="en">English</option>
-                        <option value="kk">Қазақша</option>
+                        <option value="kk">Қазақша (Kazakh)</option>
                       </select>
-                    </div>
-                    <div style={{ flex: 2, minWidth: '250px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', color: 'var(--primary)' }}><Key size={18}/> Gemini API Key</label>
-                      <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Вставьте ключ сюда..." style={{ width: '100%', padding: '0.8rem', borderRadius: '8px', background: 'var(--bg-dark)', color: 'white', border: '1px solid var(--glass-border)' }} />
                     </div>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
               
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="glass-panel" style={{ padding: '2rem', cursor: 'pointer', borderTop: '4px solid var(--primary)' }} onClick={() => navigate('/vision')}>
-                <div style={{ width: '60px', height: '60px', borderRadius: '15px', background: 'var(--primary-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
-                  <Eye size={32} color="var(--primary)" />
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="glass-panel" style={{ padding: '2.5rem', cursor: 'pointer', borderTop: '6px solid var(--primary)' }} onClick={() => navigate('/vision')}>
+                <div style={{ width: '70px', height: '70px', borderRadius: '20px', background: 'var(--primary-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2rem' }}>
+                  <Eye size={40} color="var(--primary)" />
                 </div>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+                <h2 style={{ fontSize: '2rem', marginBottom: '0.8rem' }}>
                   {language === 'en' ? 'Vision' : language === 'kk' ? 'Көру' : 'Зрение'}
                 </h2>
-                <p style={{ color: 'var(--text-muted)' }}>Camera + Realtime AI</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
+                   {language === 'en' ? 'AI Eye: Real-time surroundings analysis' : language === 'kk' ? 'ИИ Көзі: Айналаны нақты уақытта талдау' : 'ИИ-Зрение: Анализ окружения в реальном времени'}
+                </p>
               </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="glass-panel" style={{ padding: '2rem', cursor: 'pointer', borderTop: '4px solid var(--accent)' }} onClick={() => navigate('/hearing')}>
-                <div style={{ width: '60px', height: '60px', borderRadius: '15px', background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
-                  <Ear size={32} color="var(--accent)" />
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="glass-panel" style={{ padding: '2.5rem', cursor: 'pointer', borderTop: '6px solid var(--accent)' }} onClick={() => navigate('/hearing')}>
+                <div style={{ width: '70px', height: '70px', borderRadius: '20px', background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2rem' }}>
+                  <Ear size={40} color="var(--accent)" />
                 </div>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+                <h2 style={{ fontSize: '2rem', marginBottom: '0.8rem' }}>
                   {language === 'en' ? 'Hearing' : language === 'kk' ? 'Есту' : 'Слух'}
                 </h2>
-                <p style={{ color: 'var(--text-muted)' }}>Audio Environment Analysis</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
+                   {language === 'en' ? 'AI Ear: Sound event detection' : language === 'kk' ? 'ИИ Смағы: Дыбыстарды тану' : 'ИИ-Слух: Определение звуковых событий'}
+                </p>
               </motion.div>
 
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="glass-panel" style={{ padding: '2rem', cursor: 'pointer', borderTop: '4px solid var(--secondary)' }} onClick={() => navigate('/speech')}>
-                <div style={{ width: '60px', height: '60px', borderRadius: '15px', background: 'var(--secondary-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
-                  <MessageSquareQuote size={32} color="var(--secondary)" />
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="glass-panel" style={{ padding: '2.5rem', cursor: 'pointer', borderTop: '6px solid var(--secondary)' }} onClick={() => navigate('/speech')}>
+                <div style={{ width: '70px', height: '70px', borderRadius: '20px', background: 'var(--secondary-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2rem' }}>
+                  <MessageSquareQuote size={40} color="var(--secondary)" />
                 </div>
-                <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
+                <h2 style={{ fontSize: '2rem', marginBottom: '0.8rem' }}>
                   {language === 'en' ? 'Speech' : language === 'kk' ? 'Сөйлеу' : 'Речь'}
                 </h2>
-                <p style={{ color: 'var(--text-muted)' }}>Voice AI Correction</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>
+                   {language === 'en' ? 'AI Voice: Intelligent speech enhancement' : language === 'kk' ? 'ИИ Дауысы: Сөйлеуді жақсарту' : 'ИИ-Речь: Интеллектуальное улучшение речи'}
+                </p>
               </motion.div>
 
             </div>

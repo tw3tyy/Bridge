@@ -8,7 +8,7 @@ import '../../index.css';
 
 const VisionMode = () => {
   const navigate = useNavigate();
-  const { apiKey, language, getVoiceLang } = useSettings();
+  const { apiKey, language, speak } = useSettings();
   
   const [activeState, setActiveState] = useState('idle'); // idle, listening, describing, danger
   const [cameraActive, setCameraActive] = useState(false);
@@ -21,16 +21,6 @@ const VisionMode = () => {
   const canvasRef = useRef(null);
   const recognitionRef = useRef(null);
   const streamRef = useRef(null);
-
-  const speak = (text, onEndCallback) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const msg = new SpeechSynthesisUtterance(text);
-      msg.lang = getVoiceLang();
-      if (onEndCallback) msg.onend = onEndCallback;
-      window.speechSynthesis.speak(msg);
-    }
-  };
 
   const startListening = () => {
     if (recognitionRef.current && (activeState === 'idle' || activeState === 'listening')) {
@@ -49,7 +39,7 @@ const VisionMode = () => {
     }
   };
 
-  // 1. Camera Initialization (Once on mount)
+  // 1. Camera Initialization
   useEffect(() => {
     const startCamera = async () => {
       try {
@@ -74,7 +64,7 @@ const VisionMode = () => {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, []); // Empty dependency array = run only once on mount
+  }, []);
 
   // 2. Speech Recognition Setup
   useEffect(() => {
@@ -83,8 +73,8 @@ const VisionMode = () => {
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
-    recognition.interimResults = false; // Only final results to avoid jitter
-    recognition.lang = getVoiceLang();
+    recognition.interimResults = false;
+    recognition.lang = language === 'ru' ? 'ru-RU' : language === 'en' ? 'en-US' : 'kk-KZ';
 
     recognition.onresult = (event) => {
       const transcript = event.results[event.results.length - 1][0].transcript.trim();
@@ -95,7 +85,6 @@ const VisionMode = () => {
     };
 
     recognition.onend = () => {
-       // Auto-restart if we are still in listening state
        if (activeState === 'listening') {
          setTimeout(() => {
             try { recognition.start(); } catch(e){}
@@ -105,17 +94,15 @@ const VisionMode = () => {
 
     recognitionRef.current = recognition;
 
-    // Speak intro only once
     if (!hasSpokenIntroRef.current) {
       hasSpokenIntroRef.current = true;
-      let introText = "Режим зрения. Просто скажите любой вопрос, например 'Что передо мной?', и я отвечу. Двойной тап — экстренная помощь.";
-      if (language === 'en') introText = "Vision mode. Ask any question like 'What is in front of me?', and I will answer. Double tap for emergency.";
-      if (language === 'kk') introText = "Көру режимі. 'Алдымда не бар?' сияқты кез келген сұрақ қойыңыз. Төтенше жағдай үшін екі рет түртіңіз.";
+      let introText = "Режим зрения. Просто скажите любой вопрос, и я отвечу.";
+      if (language === 'en') introText = "Vision mode. Ask any question, and I will answer.";
+      if (language === 'kk') introText = "Көру режимі. Сұрақ қойыңыз, мен жауап беремін.";
       
       setTimeout(() => {
         speak(introText, () => {
           setActiveState('listening');
-          startListening();
         });
       }, 500);
     }
@@ -123,9 +110,9 @@ const VisionMode = () => {
     return () => {
       if (recognitionRef.current) recognitionRef.current.abort();
     };
-  }, [language]); // Only restart if language changes
+  }, [language]);
 
-  // 3. React to state changes (Restart mic after describing)
+  // 3. React to state changes
   useEffect(() => {
     if (activeState === 'listening') {
       startListening();
@@ -174,11 +161,10 @@ const VisionMode = () => {
       return;
     }
 
-    const systemPrompt = `You are a helpful and empathetic AI assistant for the blind.
-The user just asked you: "${userCommand}"
-Answer the question based EXACTLY on what you see in the photo.
-Keep it concise (1-2 sentences). 
-Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh' : 'Russian'}`;
+    const systemPrompt = `You are an AI for the blind. 
+The user asked: "${userCommand}"
+MANDATORY: Answer the question in EXACTLY 1 concise sentence. NO more words.
+MANDATORY LANGUAGE: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh' : 'Russian'}`;
 
     try {
       const description = await generateVisionDescription(systemPrompt, base64Image, apiKey);
@@ -195,9 +181,9 @@ Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh' : 'Russ
 
   const triggerDangerMode = () => {
     setActiveState('danger');
-    let text = "Экстренный режим. Вызываю помощь, отправляю геолокацию.";
-    if (language === 'en') text = "Emergency mode. Calling for help, sending geolocation.";
-    if (language === 'kk') text = "Төтенше жағдай режимі. Көмек шақырамын, геолокацияны жіберемін.";
+    let text = "Экстренный режим. Помощь скоро будет.";
+    if (language === 'en') text = "Emergency mode. Help is on the way.";
+    if (language === 'kk') text = "Төтенше жағдай режимі. Көмек келе жатыр.";
     
     speak(text, () => {
         setTimeout(() => {
@@ -222,29 +208,23 @@ Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh' : 'Russ
       
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', zIndex: 10 }}>
         <button onClick={() => navigate('/')} className="glass-btn" style={{ padding: '0.5rem 1.2rem' }}>
           <ArrowLeft size={24} /> {language === 'en' ? "Back" : "Назад"}
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '100px', height: '70px', borderRadius: '12px', overflow: 'hidden', border: cameraActive ? '2px solid var(--accent)' : '2px solid var(--danger)', background: 'black', boxShadow: '0 4px 15px rgba(0,0,0,0.5)' }}>
-            <video ref={videoRef} playsInline autoPlay muted style={{ width: '100%', height: '100%', objectFit: 'cover', display: cameraActive ? 'block' : 'none' }} />
-            {!cameraActive && <Camera size={20} color="var(--danger)" style={{ margin: 'auto' }} />}
-          </div>
+        <div style={{ width: '100px', height: '70px', borderRadius: '12px', overflow: 'hidden', border: cameraActive ? '2px solid var(--accent)' : '2px solid var(--danger)', background: 'black' }}>
+          <video ref={videoRef} playsInline autoPlay muted style={{ width: '100%', height: '100%', objectFit: 'cover', display: cameraActive ? 'block' : 'none' }} />
+          {!cameraActive && <Camera size={20} color="var(--danger)" style={{ margin: 'auto' }} />}
         </div>
       </div>
 
-      {/* Main Interaction Area */}
       <motion.div 
         className={`glass-panel ${styles.pulse}`}
         onPointerUp={handlePointerUp}
         style={{ 
           flexGrow: 1, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          background: styles.bg, transition: 'background 0.5s ease, transform 0.2s ease', margin: '1rem',
-          borderRadius: '2.5rem', userSelect: 'none', WebkitUserSelect: 'none',
-          boxShadow: '0 20px 50px rgba(0,0,0,0.3)'
+          background: styles.bg, borderRadius: '2.5rem', margin: '1rem'
         }}
       >
         <div style={{ marginBottom: '2.5rem' }}>{styles.icon}</div>
@@ -254,9 +234,6 @@ Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh' : 'Russ
             <h2 style={{ fontSize: '2.2rem', marginBottom: '1rem' }}>
               {language === 'en' ? "I'm listening..." : language === 'kk' ? "Мен тыңдап тұрмын..." : "Я слушаю..."}
             </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem', maxWidth: '300px' }}>
-              {language === 'en' ? "Ask about your surroundings" : language === 'kk' ? "Айналаңыз туралы сұраңыз" : "Спросите о том, что перед вами"}
-            </p>
           </div>
         )}
 
@@ -265,20 +242,7 @@ Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh' : 'Russ
             {language === 'en' ? 'Thinking...' : 'Думаю...'}
           </h2>
         )}
-
-        {activeState === 'danger' && (
-          <h2 style={{ fontSize: '2.5rem', textAlign: 'center', color: 'white' }}>
-            EMERGENCY
-          </h2>
-        )}
       </motion.div>
-
-      {/* Mode Indicator Overlay */}
-       <div style={{ position: 'absolute', bottom: '2.5rem', left: '0', right: '0', textAlign: 'center', pointerEvents: 'none', opacity: 0.5 }}>
-          <span style={{ fontSize: '0.8rem', letterSpacing: '3px', color: 'var(--text-muted)' }}>
-             VISION CONTEXT ACTIVE
-          </span>
-       </div>
     </div>
   );
 };

@@ -1,11 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const SettingsContext = createContext();
 
 export const useSettings = () => useContext(SettingsContext);
 
 export const SettingsProvider = ({ children }) => {
-  // Try to get from localStorage, fallback to 'ru' explicitly
   const [language, setLanguage] = useState(() => {
     const saved = localStorage.getItem('appLang');
     return saved && (saved === 'ru' || saved === 'en' || saved === 'kk') ? saved : 'ru';
@@ -67,7 +66,6 @@ export const SettingsProvider = ({ children }) => {
         }
       } catch (e) {
         console.warn('Failed to load profile', e);
-        // Don't clear token immediately to avoid flickering, but maybe handle expiry
       }
     };
     loadProfile();
@@ -80,6 +78,42 @@ export const SettingsProvider = ({ children }) => {
       case 'ru': default: return 'ru-RU';
     }
   };
+
+  const speak = useCallback((text, onEnd) => {
+    if (!('speechSynthesis' in window)) return;
+    
+    // Stop any current speaking
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = getVoiceLang();
+    
+    const voices = window.speechSynthesis.getVoices();
+    // Try to find a female voice for the selected language
+    // Common female voice names: Samantha, Victoria (EN), Milena, Katya (RU)
+    const femaleVoice = voices.find(v => 
+      v.lang.startsWith(language) && 
+      (v.name.includes('Female') || v.name.includes('Samantha') || v.name.includes('Milena') || v.name.includes('Katya') || v.name.includes('Google'))
+    );
+    
+    if (femaleVoice) {
+      utterance.voice = femaleVoice;
+    }
+    
+    utterance.rate = 1.0;
+    utterance.pitch = 1.1; // Slightly higher pitch for feminity if voice is robotic
+    
+    if (onEnd) utterance.onend = onEnd;
+    window.speechSynthesis.speak(utterance);
+  }, [language]);
+
+  // Handle Chrome's lazy voice loading
+  useEffect(() => {
+    window.speechSynthesis.getVoices();
+    const handleVoicesChanged = () => window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+  }, []);
 
   return (
     <SettingsContext.Provider
@@ -98,6 +132,7 @@ export const SettingsProvider = ({ children }) => {
         setLevel,
         getVoiceLang,
         apiFetch,
+        speak
       }}
     >
       {children}
