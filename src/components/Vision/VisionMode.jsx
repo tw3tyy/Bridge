@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Mic, ShieldAlert, Sparkles, Camera } from 'lucide-react';
+import { ArrowLeft, Mic, ShieldAlert, Camera } from 'lucide-react';
 import { useSettings } from '../../context/SettingsContext';
 import { generateVisionDescription } from '../../utils/ai';
 import '../../index.css';
@@ -15,6 +15,7 @@ const VisionMode = () => {
   
   const clickTimer = useRef(null);
   const clickCount = useRef(0);
+  const hasSpokenRef = useRef(false);
   
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -22,6 +23,7 @@ const VisionMode = () => {
 
   const speak = (text, onEndCallback) => {
     if ('speechSynthesis' in window) {
+      // Don't cancel immediately before speaking if we're chaining? Actually cancel is fine but it might stop previous messages abruptly.
       window.speechSynthesis.cancel();
       const msg = new SpeechSynthesisUtterance(text);
       msg.lang = getVoiceLang();
@@ -43,11 +45,13 @@ const VisionMode = () => {
   };
 
   useEffect(() => {
-    let introText = "Режим зрения. Просто скажите 'Опиши', чтобы узнать, что перед вами. Двойной тап по экрану — экстренная помощь.";
-    if (language === 'en') introText = "Vision mode. Just say 'Describe' to hear what is in front of you. Double tap screen for emergency.";
-    if (language === 'kk') introText = "Көру режимі. 'Сипатта' деп айтыңыз. Төтенше жағдай үшін екі рет түртіңіз.";
+    if (hasSpokenRef.current) return;
+    hasSpokenRef.current = true;
+
+    let introText = "Режим зрения. Просто скажите любой вопрос, например 'Что передо мной?', и я отвечу. Двойной тап — экстренная помощь.";
+    if (language === 'en') introText = "Vision mode. Ask any question like 'What is in front of me?', and I will answer. Double tap for emergency.";
+    if (language === 'kk') introText = "Көру режимі. 'Алдымда не бар?' сияқты кез келген сұрақ қойыңыз. Төтенше жағдай үшін екі рет түртіңіз.";
     
-    // Setup Speech Recognition
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
@@ -56,21 +60,21 @@ const VisionMode = () => {
       recognition.lang = getVoiceLang();
 
       recognition.onresult = (event) => {
-        let transcript = '';
+        let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-          transcript += event.results[i][0].transcript.toLowerCase();
+          if (event.results[i].isFinal) {
+             finalTranscript += event.results[i][0].transcript.trim();
+          }
         }
         
-        const isWakeWord = transcript.includes('опиши') || transcript.includes('что') || transcript.includes('скажи') || transcript.includes('describe') || transcript.includes('what') || transcript.includes('сипатта') || transcript.includes('не бар');
-        
-        if (isWakeWord && activeState !== 'describing' && activeState !== 'danger') {
+        // If the user said a sentence/phrase and paused, triggering isFinal text
+        if (finalTranscript.length > 3 && activeState !== 'describing' && activeState !== 'danger') {
             stopListening();
-            triggerDescribeWorld();
+            triggerDescribeWorld(finalTranscript);
         }
       };
 
       recognition.onend = () => {
-         // Auto-restart listening if we are supposed to be idle/listening, to maintain voice command readiness
          if (activeState === 'idle' || activeState === 'listening') {
              setTimeout(() => {
                 if (recognitionRef.current && (activeState === 'idle' || activeState === 'listening')) {
@@ -83,7 +87,6 @@ const VisionMode = () => {
       recognitionRef.current = recognition;
     }
 
-    // Speak intro, THEN activate microphone so it doesn't hear itself
     speak(introText, () => {
        startListening();
     });
@@ -110,7 +113,7 @@ const VisionMode = () => {
          videoRef.current.srcObject.getTracks().forEach(t => t.stop());
       }
     };
-  }, [language, activeState]); // Only rebind on language change, activeState change is handled via ref checks and timeouts
+  }, [language, activeState]);
 
   const captureFrame = () => {
     if (!videoRef.current || !canvasRef.current) return null;
@@ -127,10 +130,8 @@ const VisionMode = () => {
 
   const handlePointerUp = (e) => {
     clickCount.current += 1;
-    
     if (clickCount.current === 1) {
       clickTimer.current = setTimeout(() => {
-        // Just single tap, maybe restart listening if it died. Do not describe.
         if (clickCount.current === 1 && activeState !== 'describing' && activeState !== 'danger') {
            startListening();
         }
@@ -143,24 +144,22 @@ const VisionMode = () => {
     }
   };
 
-  const triggerDescribeWorld = async () => {
+  const triggerDescribeWorld = async (userCommand) => {
     setActiveState('describing');
-    speak(language === 'en' ? "Looking..." : "Секунду...");
+    speak(language === 'en' ? "Looking..." : "Разбираюсь...");
     
     const base64Image = captureFrame();
-    
-    let mockResponse = "Дверь направо, впереди коридор.";
-    if (language === 'en') mockResponse = "Door on right, corridor ahead.";
-    if (language === 'kk') mockResponse = "Оң жақта есік, алда дәліз.";
+    let mockResponse = language === 'en' ? "I'm looking at a room." : "Я вижу комнату перед вами.";
 
-    const systemPrompt = `You are an AI for the blind analyzing a photo.
-Describe strictly what is physically present. MAXIMUM 3-6 words absolute limit. NO verbs, NO filler words.
-If you recognize a room number on a door, output it exactly. If you see an obstacle, state it clearly.
-DO NOT invent objects. If the image is entirely dark or unclear, say "Темно" or "Не видно".
-Mandatory Output Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh' : 'Russian'}`;
+    const systemPrompt = `You are a helpful and empathetic AI assistant for the blind.
+The user just asked you: "${userCommand}"
+Look at the attached photo from their camera and answer their question based EXACTLY on what you see.
+Keep your answer clear, natural, and understandable, but not too long or overly complicated (1-2 sentences). 
+If it's safe to walk, mention it briefly. If they asked a specific question like "what color is this", answer it directly.
+Mandatory Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh' : 'Russian'}`;
 
     if (base64Image && apiKey) {
-        const description = await generateVisionDescription('Что ты видишь?', base64Image, apiKey, mockResponse);
+        const description = await generateVisionDescription(systemPrompt, base64Image, apiKey, mockResponse);
         speak(description, () => {
             setActiveState('listening');
             startListening();
@@ -194,7 +193,7 @@ Mandatory Output Language: ${language === 'en' ? 'English' : language === 'kk' ?
     switch(activeState) {
       case 'describing': return { bg: 'var(--primary)', pulse: 'animate-pulse-glow', icon: <Camera size={80} color="white" /> };
       case 'danger': return { bg: 'var(--danger)', pulse: 'animate-pulse-danger', icon: <ShieldAlert size={80} color="white" /> };
-      case 'listening': return { bg: 'var(--accent)', pulse: 'animate-pulse-glow', icon: <Mic size={80} color="white" /> };
+      case 'listening': return { bg: 'var(--bg-card)', pulse: '', icon: <Mic size={80} color="var(--primary)" /> };
       default: return { bg: 'var(--bg-card)', pulse: '', icon: <Mic size={80} color="var(--primary)" /> };
     }
   };
@@ -239,12 +238,12 @@ Mandatory Output Language: ${language === 'en' ? 'English' : language === 'kk' ?
         
         {(activeState === 'idle' || activeState === 'listening') && (
           <h2 style={{ fontSize: '1.8rem', textAlign: 'center', opacity: 0.8 }}>
-            {language === 'en' ? "Say 'Describe'" : language === 'kk' ? "'Сипатта' деп айтыңыз" : "Скажите «Опиши»"}
+            {language === 'en' ? "Ask any question" : language === 'kk' ? "Сұрақ қойыңыз" : "Задайте любой вопрос"}
             <div style={{ fontSize: '1rem', marginTop: '15px' }}>
                {language === 'en' ? "Or double tap for Help" : "Двойной тап: Экстренная помощь"}
             </div>
             <div style={{ fontSize: '0.9rem', marginTop: '10px', color: 'var(--danger)' }}>
-              {!apiKey && (language === 'en' ? "⚠️ Needs API Key" : "⚠️ Нужен ключ API для реального ИИ")}
+              {!apiKey && (language === 'en' ? "⚠️ Needs API Key" : "⚠️ Нужен API ключ для работы ИИ")}
             </div>
           </h2>
         )}
