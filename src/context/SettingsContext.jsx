@@ -5,14 +5,18 @@ const SettingsContext = createContext();
 export const useSettings = () => useContext(SettingsContext);
 
 export const SettingsProvider = ({ children }) => {
-  const [language, setLanguage] = useState(() => localStorage.getItem('appLang') || 'ru');
+  // Try to get from localStorage, fallback to 'ru' explicitly
+  const [language, setLanguage] = useState(() => {
+    const saved = localStorage.getItem('appLang');
+    return saved && (saved === 'ru' || saved === 'en' || saved === 'kk') ? saved : 'ru';
+  });
+  
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
   const [userName, setUserName] = useState(() => localStorage.getItem('bridgeUserName') || '');
   const [authToken, setAuthToken] = useState(() => localStorage.getItem('bridgeAuthToken') || '');
   const [xp, setXp] = useState(() => Number(localStorage.getItem('bridgeXp')) || 0);
   const [level, setLevel] = useState(() => Number(localStorage.getItem('bridgeLevel')) || 1);
 
-  // Persist simple settings
   useEffect(() => {
     localStorage.setItem('appLang', language);
   }, [language]);
@@ -37,7 +41,6 @@ export const SettingsProvider = ({ children }) => {
     localStorage.setItem('bridgeLevel', level);
   }, [level]);
 
-  // Helper to add Authorization header automatically
   const apiFetch = async (url, options = {}) => {
     const headers = { ...(options.headers || {}) };
     if (authToken) {
@@ -52,36 +55,29 @@ export const SettingsProvider = ({ children }) => {
     return data;
   };
 
-  // On app start, if we have a token try to fetch user profile
   useEffect(() => {
     const loadProfile = async () => {
       if (!authToken) return;
       try {
         const data = await apiFetch('/api/auth/me');
-        const { user } = data;
-        setUserName(user.username);
-        setXp(user.xp ?? 0);
-        setLevel(user.level ?? 1);
+        if (data.user) {
+          setUserName(data.user.username);
+          setXp(data.user.xp ?? 0);
+          setLevel(data.user.level ?? 1);
+        }
       } catch (e) {
         console.warn('Failed to load profile', e);
-        // token might be invalid – clear it
-        setAuthToken('');
-        setUserName('');
+        // Don't clear token immediately to avoid flickering, but maybe handle expiry
       }
     };
     loadProfile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authToken]);
 
   const getVoiceLang = () => {
     switch (language) {
-      case 'en':
-        return 'en-US';
-      case 'kk':
-        return 'kk-KZ';
-      case 'ru':
-      default:
-        return 'ru-RU';
+      case 'en': return 'en-US';
+      case 'kk': return 'kk-KZ';
+      case 'ru': default: return 'ru-RU';
     }
   };
 
