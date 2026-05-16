@@ -1,4 +1,4 @@
-const HARDCODED_KEY = "AIzaSyBk4TxwjkiwEsMqgNLC_kVMkkHY3Wzn6PI";
+const HARDCODED_KEY = "AIzaSyC6wqgGcUR6r3Z1QmolprDhQcrvTbXIlo0";
 
 const proxyFetch = async (payload, localApiKey) => {
   const key = (localApiKey && localApiKey.length > 20) ? localApiKey : HARDCODED_KEY;
