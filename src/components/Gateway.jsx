@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, Ear, MessageSquareQuote, Play, Award, Settings, Key, Globe, AlertCircle } from 'lucide-react';
+import { Eye, Ear, MessageSquareQuote, Play, Award, Settings, Key, Globe, AlertCircle, Mic } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import '../index.css';
 
@@ -9,14 +9,16 @@ const Gateway = () => {
   const navigate = useNavigate();
   const [started, setStarted] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const { language, setLanguage, apiKey, setApiKey, getVoiceLang } = useSettings();
+  const recognitionRef = useRef(null);
 
   const speakWelcome = () => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      let text = "Добро пожаловать в Bridge. Выберите режим или назовите команду.";
-      if (language === 'en') text = "Welcome to Bridge. Choose a mode or speak a command.";
-      if (language === 'kk') text = "Bridge-ке қош келдіңіз. Режимді таңдаңыз.";
+      let text = "Добро пожаловать в Bridge. Скажите: Зрение, Слух, или Речь.";
+      if (language === 'en') text = "Welcome to Bridge. Say: Vision, Hearing, or Speech.";
+      if (language === 'kk') text = "Bridge-ке қош келдіңіз. 'Көру', 'Есту' немесе 'Сөйлеу' деп айтыңыз.";
       const msg = new SpeechSynthesisUtterance(text);
       msg.lang = getVoiceLang();
       window.speechSynthesis.speak(msg);
@@ -28,6 +30,59 @@ const Gateway = () => {
     setTimeout(() => speakWelcome(), 500);
   };
 
+  // Voice Navigation functionality
+  useEffect(() => {
+    if (!started) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = getVoiceLang();
+
+      recognition.onstart = () => setIsListening(true);
+      
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript.toLowerCase();
+        }
+        
+        // Check for navigation commands
+        if (transcript.includes('зрени') || transcript.includes('опиши') || transcript.includes('vision') || transcript.includes('көр')) {
+            recognition.stop();
+            navigate('/vision');
+        } else if (transcript.includes('слух') || transcript.includes('hearing') || transcript.includes('есту')) {
+            recognition.stop();
+            navigate('/hearing');
+        } else if (transcript.includes('речь') || transcript.includes('сказать') || transcript.includes('speech') || transcript.includes('сөйл')) {
+            recognition.stop();
+            navigate('/speech');
+        }
+      };
+
+      recognition.onend = () => {
+         setIsListening(false);
+         // Keep listening active on gateway unless settings are open
+         if (started && !showSettings) {
+             setTimeout(() => {
+                 if (recognitionRef.current) {
+                     try { recognitionRef.current.start(); } catch(e){}
+                 }
+             }, 1000);
+         }
+      };
+
+      recognitionRef.current = recognition;
+      try { recognition.start(); } catch(e){}
+    }
+
+    return () => {
+      if (recognitionRef.current) recognitionRef.current.abort();
+    };
+  }, [started, language, showSettings, navigate]);
+
   return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '100vh', padding: '1rem' }}>
       <AnimatePresence mode="wait">
@@ -38,18 +93,18 @@ const Gateway = () => {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)" }}
             transition={{ duration: 0.6 }}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', cursor: 'pointer' }}
+            onClick={handleStart} // THE WHOLE SCREEN IS CLICKABLE
           >
             <div 
-              style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems:'center', justifyContent:'center', cursor: 'pointer', boxShadow: '0 0 40px var(--primary-glow)' }}
+              style={{ width: '150px', height: '150px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems:'center', justifyContent:'center', boxShadow: '0 0 40px var(--primary-glow)' }}
               className="animate-pulse-glow"
-              onClick={handleStart}
             >
               <Play size={64} color="white" fill="white" style={{ marginLeft: '10px' }}/>
             </div>
             <h1 className="text-gradient" style={{ fontSize: '3rem', marginTop: '2rem', marginBottom: '1rem' }}>BRIDGE</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem', textAlign: 'center', maxWidth: '400px' }}>
-              Платформа искусственного интеллекта для инклюзивного общения.
+              Нажмите в любую точку экрана, чтобы начать
             </p>
           </motion.div>
         ) : (
@@ -62,9 +117,12 @@ const Gateway = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
-                <h1 className="text-gradient" style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>Bridge</h1>
+                <h1 className="text-gradient" style={{ fontSize: '3rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '15px' }}>
+                   Bridge 
+                   {isListening && <Mic size={28} color="var(--accent)" className="animate-pulse-glow" />}
+                </h1>
                 <p style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>
-                   {language === 'en' ? 'Speak a command or tap the screen.' : language === 'kk' ? 'Пәрменді айтыңыз немесе экранды түртіңіз.' : 'Скажите команду или коснитесь экрана.'}
+                   {language === 'en' ? 'Say: "Vision", "Hearing" or "Speech"' : language === 'kk' ? '"Көру", "Есту" немесе "Сөйлеу" деп айтыңыз' : 'Скажите: "Зрение", "Слух" или "Речь"'}
                 </p>
               </div>
               
@@ -86,7 +144,7 @@ const Gateway = () => {
                  <AlertCircle color="var(--danger)" />
                  <div>
                    <h4 style={{ margin: 0, color: 'var(--danger)' }}>API ключ не найден</h4>
-                   <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)' }}>Для работы камеры и реального ИИ нажмите на шестеренку и добавьте Gemini API Key. Иначе будут работать только демо-заглушки.</p>
+                   <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)' }}>Для работы камеры и ИИ нажмите на шестеренку и добавьте Gemini API Key. Иначе будут работать только демо-заглушки.</p>
                  </div>
               </motion.div>
             )}
@@ -126,7 +184,7 @@ const Gateway = () => {
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>
                   {language === 'en' ? 'Vision' : language === 'kk' ? 'Көру' : 'Зрение'}
                 </h2>
-                <p style={{ color: 'var(--text-muted)' }}>Camera + Realtime AI Context</p>
+                <p style={{ color: 'var(--text-muted)' }}>Camera + Realtime AI</p>
               </motion.div>
 
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="glass-panel" style={{ padding: '2rem', cursor: 'pointer', borderTop: '4px solid var(--accent)' }} onClick={() => navigate('/hearing')}>
