@@ -12,15 +12,14 @@ export default async function handler(req, res) {
   }
 
   const { payload } = req.body;
-  
-  // This reads from the secure Vercel environment variables
-  const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: { message: "Серверный ключ API не настроен! Добавьте GEMINI_API_KEY в Vercel Environment Variables." } });
+    return res.status(500).json({ error: { message: "API key not configured in Vercel." } });
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // Changed v1beta to v1 (stable) to avoid the "model not found" error
+  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
   try {
     const geminiRes = await fetch(url, {
@@ -28,9 +27,11 @@ export default async function handler(req, res) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+    
     const data = await geminiRes.json();
     
     if (data.error) {
+       console.error("Gemini API Error:", data.error);
        return res.status(500).json(data);
     }
     

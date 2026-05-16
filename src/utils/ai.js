@@ -1,6 +1,7 @@
 const proxyFetch = async (payload, localApiKey) => {
   if (localApiKey && localApiKey.trim().length > 10) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${localApiKey.trim()}`;
+    // Changed v1beta to v1
+    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${localApiKey.trim()}`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -10,7 +11,7 @@ const proxyFetch = async (payload, localApiKey) => {
     if (data.error) throw new Error(data.error.message);
     return data;
   } else {
-    // Correctly route to our Vercel Serverless Function
+    // Secure production route
     const res = await fetch('/api/gemini', {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -38,12 +39,7 @@ export const generateCompletion = async (text, apiKey, systemPrompt, mock = '') 
 
 export const generateVisionDescription = async (prompt, base64Image, apiKey) => {
   if (!base64Image) return "Ошибка камеры";
-  
-  // Clean base64 data
-  let base64Data = base64Image;
-  if (base64Image.includes(',')) {
-    base64Data = base64Image.split(',')[1];
-  }
+  let base64Data = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
   
   const payload = {
     contents: [{ 
@@ -62,10 +58,7 @@ export const generateVisionDescription = async (prompt, base64Image, apiKey) => 
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
     console.error("Vision Error:", e);
-    if (e.message.includes('key not configured')) {
-      return "Ошибка: Проверьте GEMINI_API_KEY в настройках Vercel.";
-    }
-    return "Не удалось получить ответ. Попробуйте еще раз.";
+    return e.message; // Return exact error for debugging
   }
 };
 
@@ -86,6 +79,6 @@ export const generateAudioAnalysis = async (base64Audio, language, apiKey) => {
     const data = await proxyFetch(payload, apiKey);
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
-    return "Ошибка анализа звука.";
+    return e.message;
   }
 };
