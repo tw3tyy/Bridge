@@ -2,30 +2,36 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const SettingsContext = createContext();
 
+export const useSettings = () => useContext(SettingsContext);
+
 export const SettingsProvider = ({ children }) => {
-  const [language, setLanguage] = useState(localStorage.getItem('bridge_lang') || 'ru'); // ru, en, kk
-  const [apiKey, setApiKey] = useState(localStorage.getItem('bridge_gemini_key') || '');
+  const [language, setLanguage] = useState(() => localStorage.getItem('appLang') || 'ru');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
+  const [userName, setUserName] = useState(() => localStorage.getItem('bridgeUserName') || '');
 
   useEffect(() => {
-    localStorage.setItem('bridge_lang', language);
+    localStorage.setItem('appLang', language);
   }, [language]);
 
   useEffect(() => {
-    localStorage.setItem('bridge_gemini_key', apiKey);
+    localStorage.setItem('geminiApiKey', apiKey);
   }, [apiKey]);
+  
+  useEffect(() => {
+    localStorage.setItem('bridgeUserName', userName);
+  }, [userName]);
 
-  // Map app lang to Web Speech API lang
   const getVoiceLang = () => {
-    if (language === 'en') return 'en-US';
-    if (language === 'kk') return 'kk-KZ'; // Keep in mind kk-KZ might not be supported on all browsers
-    return 'ru-RU';
+    switch(language) {
+      case 'en': return 'en-US';
+      case 'kk': return 'kk-KZ';
+      case 'ru': default: return 'ru-RU';
+    }
   };
 
   return (
-    <SettingsContext.Provider value={{ language, setLanguage, apiKey, setApiKey, getVoiceLang }}>
+    <SettingsContext.Provider value={{ language, setLanguage, apiKey, setApiKey, userName, setUserName, getVoiceLang }}>
       {children}
     </SettingsContext.Provider>
   );
 };
-
-export const useSettings = () => useContext(SettingsContext);
