@@ -158,15 +158,22 @@ Keep your answer clear, natural, and understandable, but not too long or overly 
 If it's safe to walk, mention it briefly. If they asked a specific question like "what color is this", answer it directly.
 Mandatory Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh' : 'Russian'}`;
 
-    if (base64Image && apiKey) {
-        const description = await generateVisionDescription(systemPrompt, base64Image, apiKey, mockResponse);
-        speak(description, () => {
-            setActiveState('listening');
-            startListening();
-        });
+    if (base64Image) {
+        try {
+            const description = await generateVisionDescription(systemPrompt, base64Image, apiKey, mockResponse);
+            speak(description, () => {
+                setActiveState('listening');
+                startListening();
+            });
+        } catch (error) {
+            speak(language === 'en' ? "Connection error." : "Ошибка связи.", () => {
+                setActiveState('listening');
+                startListening();
+            });
+        }
     } else {
         setTimeout(() => {
-          speak(apiKey ? mockResponse : (language === 'en' ? "API error. " + mockResponse : "Ключ не найден. " + mockResponse), () => {
+          speak(mockResponse, () => {
              setActiveState('listening');
              startListening();
           });
@@ -241,9 +248,6 @@ Mandatory Language: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazak
             {language === 'en' ? "Ask any question" : language === 'kk' ? "Сұрақ қойыңыз" : "Задайте любой вопрос"}
             <div style={{ fontSize: '1rem', marginTop: '15px' }}>
                {language === 'en' ? "Or double tap for Help" : "Двойной тап: Экстренная помощь"}
-            </div>
-            <div style={{ fontSize: '0.9rem', marginTop: '10px', color: 'var(--danger)' }}>
-              {!apiKey && (language === 'en' ? "⚠️ Needs API Key" : "⚠️ Нужен API ключ для работы ИИ")}
             </div>
           </h2>
         )}

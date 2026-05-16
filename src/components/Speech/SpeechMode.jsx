@@ -105,29 +105,19 @@ Language must be: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh'
     }
 
     try {
-      if (apiKey) {
-        const rawRes = await generateCompletion(text, apiKey, systemPrompt, mockResponse);
-        let cleanJson = rawRes.replace(/```json/gi, '').replace(/```/g, '').trim();
-        
-        try {
-          const parsedOptions = JSON.parse(cleanJson);
-          if (Array.isArray(parsedOptions) && parsedOptions.length > 0) {
-             setOptions(parsedOptions);
-          } else {
-             throw new Error("Parsed JSON is not an array");
-          }
-        } catch (parseError) {
-          console.error("Failed to parse Gemini output:", cleanJson);
-           // If Gemini hallucinated and didn't return JSON, just show its raw text as one option
-          setOptions([cleanJson.substring(0, 100) + "..."]);
+      const rawRes = await generateCompletion(text, apiKey, systemPrompt, mockResponse);
+      let cleanJson = rawRes.replace(/```json/gi, '').replace(/```/g, '').trim();
+      
+      try {
+        const parsedOptions = JSON.parse(cleanJson);
+        if (Array.isArray(parsedOptions) && parsedOptions.length > 0) {
+           setOptions(parsedOptions);
+        } else {
+           throw new Error("Parsed JSON is not an array");
         }
-      } else {
-        // Mock fallback delay
-        setTimeout(() => {
-          setOptions(JSON.parse(mockResponse));
-          setIsProcessing(false);
-        }, 1500);
-        return; // handle isProcessing inside timeout
+      } catch (parseError) {
+        console.error("Failed to parse Gemini output:", cleanJson);
+        setOptions([cleanJson.substring(0, 100) + "..."]);
       }
     } catch (e) {
       console.error(e);
@@ -153,12 +143,7 @@ Language must be: ${language === 'en' ? 'English' : language === 'kk' ? 'Kazakh'
 
       <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: '2rem', justifyContent: 'center', alignItems: 'center' }}>
         
-        {!apiKey && (
-           <div style={{ padding: '0.8rem 1.5rem', background: 'rgba(236,72,153,0.1)', border: '1px solid var(--secondary)', borderRadius: '1rem', color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Key size={18} color="var(--secondary)" /> 
-              {language === 'en' ? "Using Mock API Options" : "Включен демо-режим (вставьте API ключ для ИИ)"}
-           </div>
-        )}
+
 
         <div style={{ padding: '0.8rem 1.5rem', background: 'var(--bg-card)', borderRadius: '1rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem' }}>
           <Info size={18} />

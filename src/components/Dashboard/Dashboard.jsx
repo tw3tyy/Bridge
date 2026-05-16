@@ -1,26 +1,58 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import {ArrowLeft, Award, Star, Info, User, LogIn, UserPlus } from 'lucide-react';
+import { ArrowLeft, Award, Star, Info, User, LogIn, UserPlus, Loader2 } from 'lucide-react';
 import { useSettings } from '../../context/SettingsContext';
 import '../../index.css';
 
-const AuthScreen = ({ onSuccess }) => {
-  const { language } = useSettings();
+const AuthScreen = () => {
+  const { language, setAuthToken, setUserName, setXp, setLevel } = useSettings();
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (name.trim()) {
-      onSuccess(name);
+    setLoading(true);
+    setError('');
+
+    const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+    const body = isLogin 
+      ? { email, password } 
+      : { username: name, email, password };
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error?.message || 'Ошибка сервера');
+      }
+
+      // Success
+      setAuthToken(data.token);
+      setUserName(data.user.username);
+      setXp(data.user.xp || 0);
+      setLevel(data.user.level || 1);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const t = {
     loginTitle: language === 'en' ? 'Welcome Back' : language === 'kk' ? 'Қайта оралуыңызбен' : 'С возвращением',
     regTitle: language === 'en' ? 'Create Account' : language === 'kk' ? 'Тіркелу' : 'Создать аккаунт',
-    nameLabel: language === 'en' ? 'Your Name' : language === 'kk' ? 'Атыңыз' : 'Ваше имя',
+    nameLabel: language === 'en' ? 'Username' : language === 'kk' ? 'Пайдаланушы аты' : 'Имя пользователя',
     emailLabel: language === 'en' ? 'Email' : language === 'kk' ? 'Электрондық пошта' : 'Email',
     passLabel: language === 'en' ? 'Password' : language === 'kk' ? 'Құпия сөз' : 'Пароль',
     loginBtn: language === 'en' ? 'Log In' : language === 'kk' ? 'Кіру' : 'Войти',
@@ -38,21 +70,25 @@ const AuthScreen = ({ onSuccess }) => {
       </div>
       <h2 style={{ marginBottom: '2rem', fontSize: '1.8rem' }}>{isLogin ? t.loginTitle : t.regTitle}</h2>
       
+      {error && (
+        <div style={{ color: 'var(--danger)', marginBottom: '1rem', fontSize: '0.9rem', background: 'rgba(239, 68, 68, 0.1)', padding: '0.5rem', borderRadius: '8px' }}>
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {!isLogin && (
           <input required type="text" placeholder={t.nameLabel} value={name} onChange={(e) => setName(e.target.value)} style={{ padding: '1rem', borderRadius: '8px', background: 'var(--bg-dark)', color: 'white', border: '1px solid var(--glass-border)' }} />
         )}
-        {isLogin && (
-          <input required type="text" placeholder={t.nameLabel + " / Login"} value={name} onChange={(e) => setName(e.target.value)} style={{ padding: '1rem', borderRadius: '8px', background: 'var(--bg-dark)', color: 'white', border: '1px solid var(--glass-border)' }} />
-        )}
-        <input required type="password" placeholder={t.passLabel} style={{ padding: '1rem', borderRadius: '8px', background: 'var(--bg-dark)', color: 'white', border: '1px solid var(--glass-border)' }} />
+        <input required type="email" placeholder={t.emailLabel} value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: '1rem', borderRadius: '8px', background: 'var(--bg-dark)', color: 'white', border: '1px solid var(--glass-border)' }} />
+        <input required type="password" placeholder={t.passLabel} value={password} onChange={(e) => setPassword(e.target.value)} style={{ padding: '1rem', borderRadius: '8px', background: 'var(--bg-dark)', color: 'white', border: '1px solid var(--glass-border)' }} />
         
-        <button type="submit" className="glass-btn primary" style={{ marginTop: '1rem', padding: '1rem' }}>
-          {isLogin ? <><LogIn size={20}/> {t.loginBtn}</> : <><UserPlus size={20}/> {t.regBtn}</>}
+        <button type="submit" disabled={loading} className="glass-btn primary" style={{ marginTop: '1rem', padding: '1rem' }}>
+          {loading ? <Loader2 className="animate-spin" /> : (isLogin ? <><LogIn size={20}/> {t.loginBtn}</> : <><UserPlus size={20}/> {t.regBtn}</>)}
         </button>
       </form>
       
-      <button onClick={() => setIsLogin(!isLogin)} style={{ marginTop: '1.5rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
+      <button onClick={() => { setIsLogin(!isLogin); setError(''); }} style={{ marginTop: '1.5rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}>
         {isLogin ? t.switchReg : t.switchLog}
       </button>
     </motion.div>
@@ -61,16 +97,19 @@ const AuthScreen = ({ onSuccess }) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { language, userName, setUserName } = useSettings();
+  const { language, userName, setUserName, xp, level, authToken, setAuthToken } = useSettings();
 
   const handleLogout = () => {
     setUserName('');
+    setAuthToken('');
+    localStorage.removeItem('bridgeUserName');
+    localStorage.removeItem('bridgeAuthToken');
   };
 
   const t = {
     title: language === 'en' ? 'PROFILE' : language === 'kk' ? 'ПРОФИЛЬ' : 'ПРОФИЛЬ',
     subtitle: language === 'en' ? 'Gamification & Progress' : language === 'kk' ? 'Ойындандыру және Жетістіктер' : 'Геймификация & Уровни',
-    lvl: language === 'en' ? 'Level 1' : language === 'kk' ? '1-ші деңгей' : 'Уровень 1',
+    lvl: language === 'en' ? `Level ${level}` : language === 'kk' ? `${level}-ші деңгей` : `Уровень ${level}`,
     rank: language === 'en' ? 'Rank: Beginner' : language === 'kk' ? 'Дәреже: Үйренуші' : 'Ранг: Новичок',
     expTitle: language === 'en' ? 'How to earn XP?' : language === 'kk' ? 'Тәжірибе ұпайларын қалай жинауға болады?' : 'За что дают опыт? (Геймификация)',
     exp1: language === 'en' ? '+10 XP: For every specific AI description request in Vision Mode. Promotes spatial independence.' : language === 'kk' ? '+10 XP: Көру режимінде қоршаған ортаны әрбір сұрағаныңыз үшін. Кеңістікте өз бетінше жүруді дамытады.' : '+10 XP: За каждый запрос ИИ на описание окружения (Зрение). Тренирует самостоятельность в пространстве.',
@@ -97,8 +136,8 @@ const Dashboard = () => {
       </div>
 
       <AnimatePresence mode="wait">
-        {!userName ? (
-          <AuthScreen key="auth" onSuccess={(name) => setUserName(name)} />
+        {(!authToken || !userName) ? (
+          <AuthScreen key="auth" />
         ) : (
           <motion.div key="dash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) 2fr', gap: '1.5rem', alignItems: 'start' }}>
             
@@ -118,10 +157,10 @@ const Dashboard = () => {
               <div style={{ width: '100%', marginTop: '1rem' }}>
                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px', fontSize: '0.9rem' }}>
                    <span>XP</span>
-                   <span>0 / 100 XP</span>
+                   <span>{xp} / 100 XP</span>
                  </div>
                  <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.5)', borderRadius: '4px', overflow: 'hidden', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)' }}>
-                   <div style={{ width: '0%', height: '100%', background: 'linear-gradient(90deg, var(--primary), var(--accent))' }}></div>
+                   <div style={{ width: `${Math.min(xp, 100)}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary), var(--accent))', transition: 'width 0.5s ease' }}></div>
                  </div>
               </div>
 

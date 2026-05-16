@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Mic, Ear, Zap, Activity, Info, Key } from 'lucide-react';
+import { ArrowLeft, Mic, Ear, Zap, Activity, Info } from 'lucide-react';
 import { useSettings } from '../../context/SettingsContext';
 import { generateAudioAnalysis } from '../../utils/ai';
 import '../../index.css';
@@ -47,30 +47,22 @@ const HearingMode = () => {
 
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
-        // Convert Blob to Base64
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
            const base64data = reader.result;
-           
            let mockText = language === 'en' ? 'Mock: A person is speaking calmly.' : language === 'kk' ? 'Mock: Адам сабырлы сөйлеп тұр.' : 'Дема: Человек говорит спокойно.';
            
-           if (apiKey) {
-              try {
-                const analysisText = await generateAudioAnalysis(base64data, 'audio/webm', language, apiKey, mockText);
-                addEvent(analysisText, 'high');
-              } catch (e) {
-                addEvent("AI Error: " + e.message, 'critical');
-              }
-           } else {
-              // Mock fallback if no API key
-              addEvent(mockText, 'high');
+           try {
+              const analysisText = await generateAudioAnalysis(base64data, 'audio/webm', language, apiKey, mockText);
+              addEvent(analysisText, 'high');
+           } catch (e) {
+              addEvent("AI Error: " + e.message, 'critical');
            }
            setIsAnalyzing(false);
         };
       };
 
-      // Record for 4 seconds
       mediaRecorderRef.current.start();
       setIsRecording(true);
       
@@ -111,13 +103,6 @@ const HearingMode = () => {
 
       <div style={{ flexGrow: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
         
-        {!apiKey && (
-           <div style={{ position: 'absolute', top: 0, padding: '0.8rem 1.5rem', background: 'rgba(20,184,166,0.1)', border: '1px solid var(--accent)', borderRadius: '1rem', color: 'white', display: 'flex', alignItems: 'center', gap: '10px', zIndex: 20 }}>
-              <Key size={18} color="var(--accent)" /> 
-              {language === 'en' ? "Using Mock API Options" : "Демо-режим (нужен API ключ)"}
-           </div>
-        )}
-
         {/* Start Button */}
         <div 
           onClick={() => { if (!isRecording && !isAnalyzing) startAnalysisCycle(); }}

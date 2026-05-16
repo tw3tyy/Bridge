@@ -149,16 +149,6 @@ const Gateway = () => {
               </div>
             </div>
 
-            {!apiKey && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: '1rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid var(--danger)', borderRadius: '1rem', marginBottom: '2rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                 <AlertCircle color="var(--danger)" />
-                 <div>
-                   <h4 style={{ margin: 0, color: 'var(--danger)' }}>API ключ не найден</h4>
-                   <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-main)' }}>Вставьте ключ, чтобы включить ИИ-Ассистента.</p>
-                 </div>
-              </motion.div>
-            )}
-
             <AnimatePresence>
               {showSettings && (
                 <motion.div 
