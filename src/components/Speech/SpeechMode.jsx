@@ -14,8 +14,6 @@ const SpeechMode = () => {
   const [transcript, setTranscript] = useState('');
   const [options, setOptions] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState(null);
-  
   const recognitionRef = useRef(null);
 
   useEffect(() => {
@@ -23,40 +21,31 @@ const SpeechMode = () => {
     if (!SpeechRecognition) return;
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    recognition.continuous = false; // Reliable for Safari
     recognition.interimResults = true;
     recognition.lang = language === 'en' ? 'en-US' : 'ru-RU';
 
     recognition.onresult = (event) => {
-      let current = '';
-      for (let i = 0; i < event.results.length; ++i) {
-        current += event.results[i][0].transcript;
-      }
+      const current = event.results[0][0].transcript;
       setTranscript(current);
+      if (event.results[0].isFinal) {
+        processTranscript(current);
+      }
     };
 
-    recognition.onstart = () => {
-      setIsListening(true);
-      setError(null);
-    };
-    
+    recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
     
     recognitionRef.current = recognition;
-
     return () => { if (recognitionRef.current) recognitionRef.current.abort(); };
   }, [language]);
 
   const toggleListening = () => {
     if (isListening) {
-      if (recognitionRef.current) recognitionRef.current.stop();
-      if (transcript.trim().length > 1) {
-        processTranscript(transcript);
-      }
+      recognitionRef.current.stop();
     } else {
       setTranscript('');
       setOptions([]);
-      setError(null);
       try {
         recognitionRef.current.start();
       } catch(e) {}
@@ -64,53 +53,57 @@ const SpeechMode = () => {
   };
 
   const processTranscript = async (text) => {
-    if (isProcessing) return;
+    if (text.length < 2) return;
     setIsProcessing(true);
-    const prompt = `Correct this speech: "${text}". Return ONLY a JSON array of 3 strings: ["Option1", "Option2", "Option3"]. Language: ${language === 'en' ? 'English' : 'Russian'}`;
-
+    const prompt = `Correct speech defect: "${text}". ONLY return JSON array ["Opt1", "Opt2", "Opt3"].`;
     try {
-      const res = await generateCompletion(text, apiKey, prompt);
+      const res = await generateCompletion(text, apiKey, prompt, '["Мне нужна помощь", "Где выход?", "Который час?"]');
       let clean = res.replace(/```json/gi, '').replace(/```/g, '').trim();
       try {
         const parsed = JSON.parse(clean);
         setOptions(Array.isArray(parsed) ? parsed : [clean]);
-      } catch(e) {
-        setOptions([clean]);
-      }
-    } catch (e) {
-      setOptions([text]);
-    }
+      } catch(e) { setOptions([clean]); }
+    } catch (e) { setOptions([text]); }
     setIsProcessing(false);
   };
 
   return (
-    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '1.5rem', background: '#000' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
+    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '1.5rem', background: '#000', color: 'white' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button onClick={() => navigate('/')} className="glass-btn"><ArrowLeft /></button>
-        <h2 style={{ fontSize: '1.5rem' }}>{language === 'en' ? 'SPEECH' : 'РЕЧЬ'}</h2>
+        <span style={{ fontWeight: 'bold', letterSpacing: '2px' }}>BRIDGE AI</span>
       </div>
 
-      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1.5rem' }}>
+      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2rem' }}>
         <motion.div 
           onClick={toggleListening}
-          className="glass-panel"
-          style={{ width: '180px', height: '180px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isListening ? 'var(--secondary)' : 'rgba(255,255,255,0.05)', border: isListening ? '5px solid white' : '2px solid rgba(255,255,255,0.2)', cursor: 'pointer' }}
+          animate={{ scale: isListening ? [1, 1.05, 1] : 1 }}
+          transition={{ repeat: Infinity, duration: 2 }}
+          style={{ width: '150px', height: '150px', borderRadius: '50%', background: isListening ? 'var(--danger)' : 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isListening ? '0 0 30px var(--danger)' : 'none', cursor: 'pointer' }}
         >
-          {isProcessing ? <Loader2 size={80} className="animate-spin" /> : <Mic size={80} color={isListening ? 'white' : 'var(--primary)'} />}
+          {isProcessing ? <Loader2 size={60} className="animate-spin" /> : <Mic size={60} />}
         </motion.div>
 
-        <h2 style={{ fontSize: '1.8rem', textAlign: 'center' }}>
-          {isProcessing ? "Анализирую..." : isListening ? "Нажмите, чтобы ЗАКОНЧИТЬ" : "Нажмите, чтобы НАЧАТЬ"}
+        <h2 style={{ fontSize: '1.5rem', textAlign: 'center' }}>
+          {isProcessing ? "Анализирую..." : isListening ? "ГОВОРИТЕ..." : "НАЖМИТЕ И ГОВОРИТЕ"}
         </h2>
 
-        {transcript && <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '1rem', width: '100%', textAlign: 'center' }}>"{transcript}"</div>}
+        <div style={{ minHeight: '60px', width: '100%', textAlign: 'center', fontSize: '1.4rem', fontStyle: 'italic', color: 'cyan' }}>
+          {transcript && `"${transcript}"`}
+        </div>
 
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {options.map((opt, i) => (
-             <button key={i} onClick={() => speak(opt)} className="glass-btn" style={{ justifyContent: 'flex-start', padding: '1.5rem', borderRadius: '1.2rem', background: 'rgba(255,255,255,0.05)' }}>
-               <Volume2 size={22} style={{ marginRight: '1rem', color: 'var(--secondary)' }} /> {opt}
-             </button>
-          ))}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          <AnimatePresence>
+            {options.map((opt, i) => (
+              <motion.button 
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}
+                key={i} onClick={() => speak(opt)} className="glass-btn" 
+                style={{ justifyContent: 'flex-start', padding: '1.2rem', borderRadius: '1rem', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }}
+              >
+                <Volume2 size={24} style={{ marginRight: '1rem' }} /> {opt}
+              </motion.button>
+            ))}
+          </AnimatePresence>
         </div>
       </div>
     </div>
