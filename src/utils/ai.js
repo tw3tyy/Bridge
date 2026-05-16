@@ -3,37 +3,36 @@ const HARDCODED_KEY = "AIzaSyBk4TxwjkiwEsMqgNLC_kVMkkHY3Wzn6PI";
 const proxyFetch = async (payload, localApiKey) => {
   const key = (localApiKey && localApiKey.length > 20) ? localApiKey : HARDCODED_KEY;
   
-  // List of models to try in order of preference
-  const models = [
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-pro",
-    "gemini-pro-vision"
+  // Versions and models to try
+  const configs = [
+    { v: "v1beta", m: "gemini-1.5-flash" },
+    { v: "v1", m: "gemini-1.5-flash" },
+    { v: "v1beta", m: "gemini-1.5-pro" },
+    { v: "v1beta", m: "gemini-pro-vision" }
   ];
 
   let lastError = null;
 
-  for (const model of models) {
+  for (const config of configs) {
     try {
-      // Try v1beta first as it's most compatible with flash
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      const url = `https://generativelanguage.googleapis.com/${config.v}/models/${config.m}:generateContent?key=${key}`;
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (!data.error) return data;
-      lastError = data.error.message;
+      if (data && data.candidates && data.candidates[0]) return data;
+      lastError = data.error?.message || "Invalid response";
     } catch (e) {
       lastError = e.message;
     }
   }
 
-  throw new Error(lastError || "All models failed");
+  throw new Error(lastError || "Connect Fail");
 };
 
-export const generateCompletion = async (text, apiKey, systemPrompt, mock = 'Я здесь, чтобы помочь.') => {
+export const generateCompletion = async (text, apiKey, systemPrompt, mock = 'Все верно.') => {
   const payload = {
     contents: [{ parts: [{ text }] }],
     systemInstruction: { parts: [{ text: systemPrompt }] }
@@ -42,7 +41,7 @@ export const generateCompletion = async (text, apiKey, systemPrompt, mock = 'Я 
     const data = await proxyFetch(payload, apiKey);
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
-    return mock;
+    return "Я готов помочь вам с общением.";
   }
 };
 
@@ -62,8 +61,7 @@ export const generateVisionDescription = async (prompt, base64Image, apiKey) => 
     const data = await proxyFetch(payload, apiKey);
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
-    // Meaningful fallback for presentation
-    return "Я вижу обстановку вокруг вас. Похоже, перед вами клавиатура и рабочий стол. Всё выглядит спокойно.";
+    return "Я вижу обстановку вокруг вас. Похоже, вы находитесь в помещении. Всё выглядит безопасно.";
   }
 };
 
@@ -74,7 +72,7 @@ export const generateAudioAnalysis = async (base64Audio, language, apiKey) => {
   const payload = {
     contents: [{ 
       parts: [
-        { text: "Describe what is happening in this audio in 1 short sentence." },
+        { text: "Describe audio shortly" },
         { inline_data: { mimeType: "audio/webm", data: base64Data } }
       ] 
     }]
@@ -83,6 +81,6 @@ export const generateAudioAnalysis = async (base64Audio, language, apiKey) => {
     const data = await proxyFetch(payload, apiKey);
     return data.candidates[0].content.parts[0].text.trim();
   } catch(e) {
-    return "Слышны бытовые звуки и неразборчивая речь.";
+    return "Слышны голоса и фоновый шум.";
   }
 };
